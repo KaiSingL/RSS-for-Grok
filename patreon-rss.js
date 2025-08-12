@@ -1,3 +1,4 @@
+// Updated patreon-rss.js
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
@@ -14,7 +15,15 @@ const url = require('url');
 class PatreonRSS {
 	/** @type {Object} which fields to include in the response, for now we don't need much */
 	fields = {
-		post: ['post_type', 'title', 'content', 'published_at', 'url'],
+		post: [
+			'post_type',
+			'title',
+			'content',
+			'published_at',
+			'url',
+			'teaser_text',
+			'image',
+		], // Added teaser_text and image
 		user: ['image_url', 'full_name', 'url'],
 	};
 
@@ -42,11 +51,11 @@ class PatreonRSS {
 		const data = await this.getData();
 		const BOM = '\uFEFF'; // UTF-8 BOM
 		let rss = BOM + '<?xml version="1.0" encoding="UTF-8"?>\n';
-		rss += '<rss version="2.0">\n';
+		rss += '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n'; // Added atom namespace
 		rss += '<channel>\n';
 		rss += this.getRssChannelInfo(data.campaign, data.user);
 		for (const item of data.posts) {
-			rss += this.getRssItem(item);
+			rss += this.getRssItem(item, data.user); // Passed user for author
 		}
 		rss += '</channel>\n';
 		rss += '</rss>';
@@ -154,25 +163,37 @@ class PatreonRSS {
 	 * Get a single post as RSS item string
 	 *
 	 * @param {Object} item
+	 * @param {Object} user
 	 * @return {string}
 	 */
-	getRssItem(item) {
+	getRssItem(item, user) {
 		let xml = '<item>\n';
-		xml += '<title>\n';
-		xml += this.escapeXml(item.title || '');
-		xml += '\n</title>\n';
-		xml += '<description>\n';
-		xml += this.escapeXml(item.content || '');
-		xml += '\n</description>\n';
-		xml += '<link>\n';
-		xml += this.escapeXml(item.url || '');
-		xml += '\n</link>\n';
-		xml += '<guid>\n';
-		xml += this.escapeXml(item.url || '');
-		xml += '\n</guid>\n';
-		xml += '<pubDate>\n';
-		xml += new Date(item.published_at).toUTCString();
-		xml += '\n</pubDate>\n';
+		xml += '<title>' + this.escapeXml(item.title || '') + '</title>\n';
+		xml +=
+			'<author>' +
+			this.escapeXml(user.full_name || 'Anonymous') +
+			'</author>\n'; // Added author
+		xml += '<link>' + this.escapeXml(item.url || '') + '</link>\n';
+		xml += '<guid>' + this.escapeXml(item.url || '') + '</guid>\n';
+		xml +=
+			'<pubDate>' + new Date(item.published_at).toUTCString() + '</pubDate>\n';
+
+		// Description with teaser, image, and continue link; preserve HTML with CDATA
+		let descContent =
+			item.teaser_text || (item.content || '').slice(0, 300) + '...'; // Use teaser or truncated content; no stripTags to preserve HTML
+		const image = item.image || {};
+		const imageTag = image.thumb_image_url
+			? `<img src="${this.escapeXml(
+					image.thumb_image_url
+			  )}" alt="${this.escapeXml(item.title || 'Post image')}" />`
+			: '';
+		descContent = `${imageTag}${descContent}<br><a href="${this.escapeXml(
+			item.url
+		)}">Continue Reading on Patreon</a>`;
+		// Handle CDATA edge cases
+		descContent = descContent.replace(/]]>/g, ']]]]><![CDATA[>');
+		xml += '<description><![CDATA[' + descContent + ']]></description>\n';
+
 		xml += '</item>\n';
 		return xml;
 	}
@@ -185,17 +206,21 @@ class PatreonRSS {
 	 * @return {string}
 	 */
 	getRssChannelInfo(campaign, user) {
-		let xml = '<title>\n';
-		xml += this.escapeXml(
-			(campaign.creation_name || 'Untitled Campaign') + ' Patreon Posts'
-		);
-		xml += '\n</title>\n';
-		xml += '<description>\n';
-		xml += this.escapeXml(this.stripTags(campaign.summary || ''));
-		xml += '\n</description>\n';
-		xml += '<link>\n';
-		xml += this.escapeXml(user.url || '');
-		xml += '\n</link>\n';
+		let xml =
+			'<title>' +
+			this.escapeXml(user.full_name || 'Unknown Creator') +
+			' on Patreon</title>\n'; // Updated title to use user name
+		xml +=
+			'<description>' +
+			this.escapeXml(this.stripTags(campaign.summary || '')) +
+			'</description>\n';
+		xml += '<link>' + this.escapeXml(user.url || '') + '</link>\n';
+		xml += '<language>en-US</language>\n'; // Added language
+		xml += '<generator>Patreon RSS Generator v1.0</generator>\n'; // Added generator
+		xml +=
+			'<atom:link href="' +
+			this.escapeXml(user.url || '') +
+			'" rel="self" type="application/rss+xml" />\n'; // Added atom:link using user url
 		return xml;
 	}
 

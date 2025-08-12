@@ -1,8 +1,9 @@
+// Updated server.js
 const http = require('http');
 const path = require('path');
 const PatreonRSS = require('./patreon-rss.js'); // Import the class
 
-const PORT = 8000; // Change if needed
+const PORT = process.env.PORT || 80; // Updated to use env var or default to 80
 const CACHE_DIR = __dirname; // Directory for cache files
 const CACHE_MAX_AGE = 60 * 60; // 1 hour in seconds
 
@@ -23,7 +24,9 @@ const server = http.createServer(async (req, res) => {
 		const patreon = new PatreonRSS(creatorId);
 		const rssContent = await patreon.cachedRSS(CACHE_DIR, CACHE_MAX_AGE);
 
-		res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+		res.writeHead(200, {
+			'Content-Type': 'application/rss+xml; charset=utf-8',
+		}); // Updated Content-Type for RSS
 		res.end(rssContent);
 	} catch (error) {
 		console.error('Error generating RSS:', error);
