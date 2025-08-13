@@ -27,7 +27,7 @@ const server = http.createServer(async (req, res) => {
 <body>
     <h1>Patreon RSS Generator</h1>
     <p>Enter a Patreon creator ID to generate the RSS feed:</p>
-    <input type="text" id="creatorId" placeholder="e.g., 6637687">
+    <input type="text" id="creatorId" placeholder="e.g., 42276522">
     <button onclick="search()">Search</button>
     <script>
         function search() {
@@ -60,7 +60,7 @@ const server = http.createServer(async (req, res) => {
 </head>
 <body>
     <h1>Error</h1>
-    <p>Invalid or missing creator ID. Please use a numeric ID, e.g., /6637687.</p>
+    <p>Invalid or missing creator ID. Please use a numeric ID, e.g., /42276522.</p>
     <a href="/">Back to Home</a>
 </body>
 </html>
