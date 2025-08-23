@@ -47,7 +47,7 @@ class BilibiliRSS {
 	 * @return {Promise<string>}
 	 */
 	async cachedRSS(dir, maxage) {
-		const cachefile = path.join(dir, `${this.id}.xml`);
+		const cachefile = path.join(dir, `bi_${this.id}.xml`);
 		let lastmod = 0;
 		try {
 			const stats = fs.statSync(cachefile);

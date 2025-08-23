@@ -1,3 +1,4 @@
+// patreon-rss.js
 // Updated patreon-rss.js
 const fs = require('fs');
 const path = require('path');
@@ -73,7 +74,7 @@ class PatreonRSS {
 	 * @return {Promise<string>}
 	 */
 	async cachedRSS(dir, maxage) {
-		const cachefile = path.join(dir, `${this.filter.creator_id}.xml`);
+		const cachefile = path.join(dir, `p_${this.filter.creator_id}.xml`);
 		let lastmod = 0;
 		try {
 			const stats = fs.statSync(cachefile);
