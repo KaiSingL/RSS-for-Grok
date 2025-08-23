@@ -146,11 +146,12 @@ class BilibiliRSS {
 		});
 		await browser.close();
 
-		// Parse dates to ISO strings
+		// Parse dates to ISO strings if possible
 		const currentYear = new Date().getFullYear();
 		const currentMonth = new Date().getMonth() + 1;
 		scraped.posts.forEach((post) => {
-			let dateStr = post.published_at;
+			const originalDate = post.published_at;
+			let dateStr = originalDate;
 			let year = currentYear;
 			if (dateStr.length <= 5) {
 				// MM-DD or shorter; normalize
@@ -165,9 +166,12 @@ class BilibiliRSS {
 				// YYYY-MM-DD
 				// Use as is
 			} else {
-				dateStr = `${year}-01-01`; // Fallback for invalid
+				dateStr = `${year}-01-01`; // Fallback for invalid, but will check parse
 			}
-			post.published_at = new Date(Date.parse(dateStr)).toISOString();
+			const parsed = Date.parse(dateStr);
+			if (!isNaN(parsed)) {
+				post.published_at = new Date(parsed).toISOString();
+			} // else keep originalDate as string
 			// Normalize thumb_image_url
 			if (post.image.thumb_image_url.startsWith('//')) {
 				post.image.thumb_image_url = 'https:' + post.image.thumb_image_url;
@@ -205,8 +209,14 @@ class BilibiliRSS {
 			this.escapeXml(user.full_name || 'Anonymous') +
 			'</author>\n';
 		xml += '<link>' + this.escapeXml(item.url || '') + '</link>\n';
-		xml +=
-			'<pubDate>' + new Date(item.published_at).toUTCString() + '</pubDate>\n';
+		let pubDate;
+		const dateObj = new Date(item.published_at);
+		if (isNaN(dateObj.getTime())) {
+			pubDate = this.escapeXml(item.published_at || '');
+		} else {
+			pubDate = dateObj.toUTCString();
+		}
+		xml += '<pubDate>' + pubDate + '</pubDate>\n';
 		xml += '</item>\n';
 		return xml;
 	}
