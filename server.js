@@ -3,6 +3,7 @@ const http = require('http');
 const path = require('path');
 const PatreonRSS = require('./patreon-rss.js');
 const YouTubeRSS = require('./youtube-rss.js');
+const BilibiliRSS = require('./bilibili-rss.js');
 
 const PORT = process.env.PORT || 80; // Use 80 for no-port URLs; fallback to env for cloud
 const CACHE_DIR = __dirname; // Directory for cache files
@@ -19,7 +20,7 @@ const server = http.createServer(async (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSS Generator for Patreon and YouTube</title>
+    <title>RSS Generator for Patreon, YouTube, and Bilibili</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
         select, input { padding: 10px; width: 200px; }
@@ -27,13 +28,14 @@ const server = http.createServer(async (req, res) => {
     </style>
 </head>
 <body>
-    <h1>RSS Generator for Patreon and YouTube</h1>
-    <p>Select platform and enter creator/channel ID to generate the RSS feed:</p>
+    <h1>RSS Generator for Patreon, YouTube, and Bilibili</h1>
+    <p>Select platform and enter creator/channel/user ID to generate the RSS feed:</p>
     <select id="platform">
         <option value="p">Patreon</option>
         <option value="yt">YouTube</option>
+        <option value="bi">Bilibili</option>
     </select>
-    <input type="text" id="creatorId" placeholder="e.g., 42276522 or UCmi1257Mo7v4ors9-ekOq1w">
+    <input type="text" id="creatorId" placeholder="e.g., 42276522 or UCmi1257Mo7v4ors9-ekOq1w or 1234567">
     <button onclick="search()">Generate</button>
     <script>
         function search() {
@@ -48,6 +50,9 @@ const server = http.createServer(async (req, res) => {
                 return;
             } else if (platform === 'yt' && !id.startsWith('UC')) {
                 alert('YouTube Channel ID must start with "UC".');
+                return;
+            } else if (platform === 'bi' && isNaN(id)) {
+                alert('Bilibili user ID must be numeric.');
                 return;
             }
             window.location.href = '/' + platform + '/' + id;
@@ -65,7 +70,7 @@ const server = http.createServer(async (req, res) => {
 	if (parts.length !== 2) {
 		sendError(
 			res,
-			'Invalid path. Use /p/{id} for Patreon or /yt/{id} for YouTube.'
+			'Invalid path. Use /p/{id} for Patreon, /yt/{id} for YouTube, or /bi/{id} for Bilibili.'
 		);
 		return;
 	}
@@ -86,10 +91,16 @@ const server = http.createServer(async (req, res) => {
 			return;
 		}
 		rssGenerator = new YouTubeRSS(id);
+	} else if (platform === 'bi') {
+		if (isNaN(id)) {
+			sendError(res, 'Invalid Bilibili ID: must be numeric.');
+			return;
+		}
+		rssGenerator = new BilibiliRSS(id);
 	} else {
 		sendError(
 			res,
-			'Invalid platform. Use "p" for Patreon or "yt" for YouTube.'
+			'Invalid platform. Use "p" for Patreon, "yt" for YouTube, or "bi" for Bilibili.'
 		);
 		return;
 	}
