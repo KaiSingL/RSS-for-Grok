@@ -57,6 +57,11 @@ const server = http.createServer(async (req, res) => {
             }
             window.location.href = '/' + platform + '/' + id;
         }
+        document.getElementById('creatorId').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                search();
+            }
+        });
     </script>
 </body>
 </html>
