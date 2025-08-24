@@ -81,117 +81,146 @@ class BilibiliRSS {
 	 * @return {Promise<Object>}
 	 */
 	async getData() {
-		const browser = await puppeteer.launch({
-			headless: true,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-blink-features=AutomationControlled',
-			],
-		});
-		const page = await browser.newPage();
-
-		// Stealth: Hide webdriver and set real browser properties
-		await page.evaluateOnNewDocument(() => {
-			Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-		});
-		await page.setUserAgent(
-			'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
-		);
-		await page.setViewport({ width: 1280, height: 800 });
-
-		await page.goto(`https://space.bilibili.com/${this.id}/video`, {
-			waitUntil: 'domcontentloaded',
-		});
-		await page
-			.waitForSelector('.upinfo-detail', { timeout: 60000 })
-			.catch(() => {}); // Longer timeout for user info
-		await page
-			.waitForSelector('.video-list', { timeout: 60000 })
-			.catch(() => {}); // Wait for video container
-
-		const scraped = await page.evaluate(() => {
-			const full_name = document.querySelector('.nickname')
-				? document.querySelector('.nickname').textContent.trim()
-				: 'Unknown User';
-			const summary = document.querySelector('.pure-text')
-				? document.querySelector('.pure-text').textContent.trim()
-				: '';
-			const posts = [];
-			document.querySelectorAll('.upload-video-card').forEach((card) => {
-				const titleA = card.querySelector('.bili-video-card__title a');
-				const title = titleA ? titleA.textContent.trim() : '';
-				const fullUrl = titleA ? 'https:' + titleA.getAttribute('href') : '';
-				const url = fullUrl.split('?')[0];
-				const date = card.querySelector('.bili-video-card__subtitle span')
-					? card
-							.querySelector('.bili-video-card__subtitle span')
-							.textContent.trim()
-					: '';
-				const thumb_image_url = card.querySelector(
-					'.bili-cover-card__thumbnail img'
-				)
-					? card
-							.querySelector('.bili-cover-card__thumbnail img')
-							.getAttribute('src')
-					: '';
-				posts.push({
-					title,
-					url,
-					published_at: date,
-					image: { thumb_image_url },
-				});
-			});
-			return { full_name, summary, posts };
-		});
-		await browser.close();
-
-		// Parse dates to ISO strings if possible
-		const currentYear = new Date().getFullYear();
-		const currentMonth = new Date().getMonth() + 1;
-		scraped.posts.forEach((post) => {
-			const originalDate = post.published_at;
-			let dateStr = originalDate;
-			let year = currentYear;
-			if (dateStr.length <= 5) {
-				// MM-DD or shorter; normalize
-				const parts = dateStr.split('-').map((part) => part.padStart(2, '0'));
-				dateStr = parts.join('-');
-				const [month, day] = parts.map(Number);
-				if (month > currentMonth) {
-					year--;
+		try {
+			let executablePath = undefined; // Default: omit
+			if (process.platform === 'linux') {
+				try {
+					const osRelease = await fs.promises.readFile(
+						'/etc/os-release',
+						'utf8'
+					);
+					if (osRelease.includes('ID=debian')) {
+						executablePath = '/usr/bin/chromium';
+						console.error(
+							'Detected Debian; using executablePath:',
+							executablePath
+						);
+					}
+				} catch (err) {
+					console.error(
+						'Failed to read /etc/os-release; omitting executablePath:',
+						err.message
+					);
 				}
-				dateStr = `${year}-${dateStr}`;
-			} else if (dateStr.length === 10 && dateStr.startsWith('20')) {
-				// YYYY-MM-DD
-				// Use as is
-			} else {
-				dateStr = `${year}-01-01`; // Fallback for invalid, but will check parse
 			}
-			const parsed = Date.parse(dateStr);
-			if (!isNaN(parsed)) {
-				post.published_at = new Date(parsed).toISOString();
-			} // else keep originalDate as string
-			// Normalize thumb_image_url
-			if (post.image.thumb_image_url.startsWith('//')) {
-				post.image.thumb_image_url = 'https:' + post.image.thumb_image_url;
-			}
-		});
 
-		const clean = {
-			posts: scraped.posts,
-			user: {
-				full_name: scraped.full_name,
-				url: `https://space.bilibili.com/${this.id}`,
-				image_url: '',
-			},
-			campaign: {
-				summary:
-					scraped.summary || `Videos from Bilibili user ${scraped.full_name}`,
-			},
-		};
+			const browser = await puppeteer.launch({
+				executablePath, // Only set if Debian detected
+				headless: true,
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-blink-features=AutomationControlled',
+				],
+				timeout: 60000, // Increase from default 30s to handle slow launches
+			});
+			const page = await browser.newPage();
 
-		return clean;
+			// Stealth: Hide webdriver and set real browser properties
+			await page.evaluateOnNewDocument(() => {
+				Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+			});
+			await page.setUserAgent(
+				'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+			);
+			await page.setViewport({ width: 1280, height: 800 });
+
+			await page.goto(`https://space.bilibili.com/${this.id}/video`, {
+				waitUntil: 'domcontentloaded',
+			});
+			await page
+				.waitForSelector('.upinfo-detail', { timeout: 60000 })
+				.catch(() => {}); // Longer timeout for user info
+			await page
+				.waitForSelector('.video-list', { timeout: 60000 })
+				.catch(() => {}); // Wait for video container
+
+			const scraped = await page.evaluate(() => {
+				const full_name = document.querySelector('.nickname')
+					? document.querySelector('.nickname').textContent.trim()
+					: 'Unknown User';
+				const summary = document.querySelector('.pure-text')
+					? document.querySelector('.pure-text').textContent.trim()
+					: '';
+				const posts = [];
+				document.querySelectorAll('.upload-video-card').forEach((card) => {
+					const titleA = card.querySelector('.bili-video-card__title a');
+					const title = titleA ? titleA.textContent.trim() : '';
+					const fullUrl = titleA ? 'https:' + titleA.getAttribute('href') : '';
+					const url = fullUrl.split('?')[0];
+					const date = card.querySelector('.bili-video-card__subtitle span')
+						? card
+								.querySelector('.bili-video-card__subtitle span')
+								.textContent.trim()
+						: '';
+					const thumb_image_url = card.querySelector(
+						'.bili-cover-card__thumbnail img'
+					)
+						? card
+								.querySelector('.bili-cover-card__thumbnail img')
+								.getAttribute('src')
+						: '';
+					posts.push({
+						title,
+						url,
+						published_at: date,
+						image: { thumb_image_url },
+					});
+				});
+				return { full_name, summary, posts };
+			});
+			await browser.close();
+
+			// Parse dates to ISO strings if possible
+			const currentYear = new Date().getFullYear();
+			const currentMonth = new Date().getMonth() + 1;
+			scraped.posts.forEach((post) => {
+				const originalDate = post.published_at;
+				let dateStr = originalDate;
+				let year = currentYear;
+				if (dateStr.length <= 5) {
+					// MM-DD or shorter; normalize
+					const parts = dateStr.split('-').map((part) => part.padStart(2, '0'));
+					dateStr = parts.join('-');
+					const [month, day] = parts.map(Number);
+					if (month > currentMonth) {
+						year--;
+					}
+					dateStr = `${year}-${dateStr}`;
+				} else if (dateStr.length === 10 && dateStr.startsWith('20')) {
+					// YYYY-MM-DD
+					// Use as is
+				} else {
+					dateStr = `${year}-01-01`; // Fallback for invalid, but will check parse
+				}
+				const parsed = Date.parse(dateStr);
+				if (!isNaN(parsed)) {
+					post.published_at = new Date(parsed).toISOString();
+				} // else keep originalDate as string
+				// Normalize thumb_image_url
+				if (post.image.thumb_image_url.startsWith('//')) {
+					post.image.thumb_image_url = 'https:' + post.image.thumb_image_url;
+				}
+			});
+
+			const clean = {
+				posts: scraped.posts,
+				user: {
+					full_name: scraped.full_name,
+					url: `https://space.bilibili.com/${this.id}`,
+					image_url: '',
+				},
+				campaign: {
+					summary:
+						scraped.summary || `Videos from Bilibili user ${scraped.full_name}`,
+				},
+			};
+
+			return clean;
+		} catch (error) {
+			console.error('Puppeteer error in getData:', error);
+			throw error;
+		}
 	}
 
 	/**
